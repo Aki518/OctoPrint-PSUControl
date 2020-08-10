@@ -97,6 +97,7 @@ class PSUControl(octoprint.plugin.StartupPlugin,
         self.pseudoOnGCodeCommand = ''
         self.pseudoOffGCodeCommand = ''
         self.postOnDelay = 0.0
+        self.postOnConnect = False
         self.autoOn = False
         self.autoOnTriggerGCodeCommands = ''
         self._autoOnTriggerGCodeCommandsArray = []
@@ -163,6 +164,9 @@ class PSUControl(octoprint.plugin.StartupPlugin,
 
         self.postOnDelay = self._settings.get_float(["postOnDelay"])
         self._logger.debug("postOnDelay: %s" % self.postOnDelay)
+
+        self.postOnConnect = self._settings.get_boolean(["postOnConnect"])
+        self._logger.debug("postOnConnect: %s" % self.postOnConnect)
 
         self.disconnectOnPowerOff = self._settings.get_boolean(["disconnectOnPowerOff"])
         self._logger.debug("disconnectOnPowerOff: %s" % self.disconnectOnPowerOff)
@@ -539,11 +543,17 @@ class PSUControl(octoprint.plugin.StartupPlugin,
             if self.sensingMethod not in ('GPIO','SYSTEM'):
                 self._noSensing_isPSUOn = True
          
-            time.sleep(0.1 + self.postOnDelay)
-            self.check_psu_state()
+            threading.Timer(0.1 + self.postOnDelay, self.check_psu_state).start()
+
+            if self.postOnConnect:
+                threading.Timer(0.1 + self.postOnDelay, self._printer.connect).start()
         
     def turn_psu_off(self):
         if self.switchingMethod == 'GCODE' or self.switchingMethod == 'GPIO' or self.switchingMethod == 'SYSTEM':
+            self._logger.info("Disconnect printer")
+            if self.disconnectOnPowerOff:
+                self._printer.disconnect()
+                
             self._logger.info("Switching PSU Off")
             if self.switchingMethod == 'GCODE':
                 self._logger.debug("Switching PSU Off Using GCODE: %s" % self.offGCodeCommand)
@@ -573,9 +583,6 @@ class PSUControl(octoprint.plugin.StartupPlugin,
                 except (RuntimeError, ValueError) as e:
                     self._logger.error(e)
 
-            if self.disconnectOnPowerOff:
-                self._printer.disconnect()
-                
             if self.sensingMethod not in ('GPIO','SYSTEM'):
                 self._noSensing_isPSUOn = False
                         
@@ -623,6 +630,7 @@ class PSUControl(octoprint.plugin.StartupPlugin,
             pseudoOnGCodeCommand = 'M80',
             pseudoOffGCodeCommand = 'M81',
             postOnDelay = 0.0,
+            postOnConnect = False,
             disconnectOnPowerOff = False,
             sensingMethod = 'INTERNAL',
             senseGPIOPin = 0,
@@ -662,6 +670,7 @@ class PSUControl(octoprint.plugin.StartupPlugin,
         self.pseudoOnGCodeCommand = self._settings.get(["pseudoOnGCodeCommand"])
         self.pseudoOffGCodeCommand = self._settings.get(["pseudoOffGCodeCommand"])
         self.postOnDelay = self._settings.get_float(["postOnDelay"])
+        self.postOnConnect = self._settings.get_boolean(["postOnConnect"])
         self.disconnectOnPowerOff = self._settings.get_boolean(["disconnectOnPowerOff"])
         self.sensingMethod = self._settings.get(["sensingMethod"])
         self.senseGPIOPin = self._settings.get_int(["senseGPIOPin"])
